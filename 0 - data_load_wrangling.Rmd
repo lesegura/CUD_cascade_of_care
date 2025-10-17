@@ -1,0 +1,28 @@
+---
+title: "Load NSDUH data"
+author: "Luis Segura"
+date: "2025-10-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+pckgs <- c("tidyverse")
+
+for (package in pckgs) {
+  library(package, character.only = T)
+}
+
+```
+
+```{r}
+load(here("data", "NSDUH_2021_2023.Rdata"))
+
+data <- data |>
+  janitor::clean_names()
+
+```
+
+```{r}
+
+```
+
