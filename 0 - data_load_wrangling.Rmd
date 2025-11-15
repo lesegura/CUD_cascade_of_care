@@ -1,12 +1,13 @@
 ---
 title: "Load NSDUH data"
 author: "Luis Segura"
-date: "2025-10-17"
+date: "'r Sys.Date()"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-pckgs <- c("tidyverse")
+### load packages
+pckgs <- c("tidyverse", "here")
 
 for (package in pckgs) {
   library(package, character.only = T)
@@ -14,6 +15,7 @@ for (package in pckgs) {
 
 ```
 
+## Load dataset and clean dataset names
 ```{r}
 load(here("data", "NSDUH_2021_2023.Rdata"))
 
@@ -22,7 +24,24 @@ data <- data |>
 
 ```
 
+## subset data to relevant variables and save
 ```{r}
+nsduh_data <- data |>
+  select(questid2, year, vestr_c, verep, analwt2_c1, analwt2_c2, analwt2_c3, pden10, coutyp4, newrace2, irinsur4, 
+         irsex, irmarit, catag6, catag7, eduhighcat, health2, irwrkstat, irwrkstat18, income, poverty3, ircbdhmprec, 
+         irmjfy, irmjfm, irmjage, irmjyfu, mrjflag, mrjyr, mrjmon, mjsmkyr, mjsmkmon, mjvapyr, mjvapmon, mrjmonvap2,
+         mjdabyr, mjdabmon, mjmthyr, mjmthmon, mjsknyr, mjsknmon, mjpllyr, mjpllmon, mjeatyr, mjeatmon, mjcmothyr, 
+         mjcmothmon, mjonlyflag, mjonlyyr, mjonlymon, mrjydays, fumj18, fumj21, irpyud5mrj, irpysev5mrj, mrjyrbfr, 
+         mrjaglst, mrjylu, mrjmlu, sutinppy, sutoutmrj, sutoutunsppy, sutoutppy, sutoutmrjpy, sutinppy, sutphvidrg, 
+         sutrtpy, irsutsuppgrp, irsutered, irsutinhosp, irsutinrhab, irsutinrsmh, irsutinopl, irsutoutrhab, irsutoutmhcr, 
+         irsutoutthrp, irsutoutdoc, irsutouthosp, irsutoutschl, irsutoutopl, irsutrxdrg, irsutphvid, irsutdetox, irsutpeerspc, 
+         sutoutndoc, sutrtpy, sutrtdrgpy, sutrtunsppy, sutrtothpy, sutneedpy, sutskthpy, suntcost, suntinscv, suntencv, 
+         suntwher, suntnofnd, suntnoopn, suntprobs, sunttime, suntpriv, suntpthnk, suntconsq, suntstart, suntquit, 
+         sunthndl, suntfflke, suntforce, suntnohlp, suntcare, hpusedrg, hpdrgtalk, synmrjflag, synmrjevr, synmrjyr, 
+         synmrjmon, nmertmt2, inhospyr, nmngths2, nmvsopt2, nmvsoest, teleaptyr2)
 
+save(nsduh_data, file = here("data/", "nsduh_4analysis.Rdata"))
 ```
+
+
 
