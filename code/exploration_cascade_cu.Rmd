@@ -1,0 +1,852 @@
+---
+title: "Exploratory Analysis of CUD cascade of care"
+author: "Luis Segura"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+    code_folding: hide
+    highlight: kate
+    self-contained: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE, echo = F}
+knitr::opts_chunk$set(echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  fig.align = "center",
+  fig.width = 7,
+  fig.height = 8,
+  out.width = "90%",
+  cache = TRUE
+)
+
+### load packages
+pckgs <- c("tidyverse", "here", "survey", "srvyr")
+
+for (package in pckgs) {
+  library(package, character.only = T)
+}
+
+```
+
+# Methods
+
+For this exploratory analysis, we are using the 2021-2023 public NSDUH data. All sample sizes (`n`) in this analysis are unweighted. Proportions and their corresponding 95% CI are calculated taking into account the NSDUH survey design and survey weights. Survey weights where divided by 3 in order to pool NSDUH years. Since we are evaluating the cascade of care of cannabis use disorder (CUD), all calculations are done **among cannabis users** because it seems like the relevant denominator. Those that do not use cannabis, and therefore don't have CUD, do not seem at risk of engaging with the steps of the cascade of care for CUD. 
+
+I noticed that the NSDUH 2024 is available, but some variables relevant to the cascade of care, like drug use treatment changed and are not comparable to previous years. For that reason, I decided not to include it for now. We can think how and if it should be included.
+
+
+```{r, echo = F}
+## Loading dataset
+load(here("data/", "nsduh_4analysis.Rdata"))
+```
+
+
+```{r, echo = F}
+## creating survey design object
+nsduh_design <- nsduh_data |>
+  as_survey_design(strata = vestr_c, 
+                   ids = verep, 
+                   weights = analwt2_c3, 
+                   nest = T) 
+```
+
+
+# Results
+
+## Prevalence of PY cannabis use and CUD (Step 1)
+Prevalence of past-year cannabis use (`mrjyr`) in NSDUH 2021-2023.
+```{r}
+table_1 <- nsduh_design |>
+  group_by(mrjyr) |>
+  summarise(n = n(),
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp))
+
+table_1 |>
+  knitr::kable()
+  
+```
+
+Prevalence of past-year CUD (`irpyud5mrj`).
+```{r}
+table_2 <- nsduh_design |>
+  mutate(irpyud5mrj = factor(irpyud5mrj, 
+                              labels = c("No CUD", "Yes CUD"))) |>
+  group_by(irpyud5mrj) |>
+  summarise(n = n(),
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp))
+
+table_2 |>
+  knitr::kable()
+```
+
+
+Prevalence of past-year severity of CUD (`irpysev5mrj`).
+```{r}
+table_3 <- nsduh_design |>
+  mutate(irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  group_by(irpysev5mrj) |>
+  summarise(n = n(),
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp))
+
+table_3 |>
+  knitr::kable()
+```
+
+### Among Cannabis Users
+
+I think this is the Step 1 of Cascade of Care of Cannabis Use Disorder.
+
+Prevalence of past-year CUD (variable `irpyud5mrj`) among cannabis users.
+```{r}
+table_4 <- nsduh_design |>
+  mutate(irpyud5mrj = factor(irpyud5mrj, 
+                              labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj) |>
+  summarise(n = n(),
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp))
+
+table_4 |>
+  knitr::kable()
+```
+
+- Notice that the N of CUD among cannabis users is 14,427. These are unweighted n's. So, at least for the period of 2021-2023 is not bad to do the entire Cascade of Care.
+
+Prevalence of past-year severity of CUD (`irpysev5mrj`).
+```{r}
+table_5 <- nsduh_design |>
+  mutate(irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj) |>
+  summarise(n = n(),
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp))
+
+table_5 |>
+  knitr::kable()
+```
+
+- The N of severity of CUD among cannabis users, even for the severe category, is not bad either.
+
+
+## Healthcare utilization (Step 2)
+
+There are 4 variables that could be used to assess healthcare utilization: `NMERTMT2`, `INHOSPYR`, `NMVSOPT2`, and `TELEAPTYR`.
+
+- `NMERTMT2` asks: During the past 12 months, that is since DATEFILL, how many different times have you been treated in an emergency room for any reason? with possible answers:
+    - RANGE = 0 - 30
+    - 31 = 31 or more
+    - 985 = BAD DATA Logically assigned
+    - 994 = DON'T KNOW
+    - 997 = REFUSED
+    - 998 = BLANK (NO ANSWER)
+
+Since `NMERTMT2` is a numeric discrete variable, I am going to recategorize it to 0 = no ED visit, 1 = ED visit, and values 985, 994, 997, and 998 as missings or `NA`.
+
+Among cannabis users, the prevalence of those visiting ED is ~27%, with an N = 10,784.
+```{r}
+table_6 <- nsduh_design |>
+  mutate(nmertmt2 = factor(ifelse(nmertmt2 > 900, NA, 
+                           ifelse(nmertmt2 > 0 & nmertmt2 < 33, 1, nmertmt2)), 
+                           labels = c("No ED visit", "ED visit"))) |>
+  filter(mrjyr == 1) |>
+  group_by(nmertmt2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp))
+
+table_6 |>
+  knitr::kable()
+
+```
+
+Prevalence of ED visits (`nmertmt2`) among those with CUD (`irpyud5mrj `). 
+```{r}
+table_7 <- nsduh_design |>
+  mutate(nmertmt2 = factor(ifelse(nmertmt2 > 900, NA, 
+                           ifelse(nmertmt2 > 0 & nmertmt2 < 33, 1, nmertmt2)), 
+                           labels = c("No ED visit", "ED visit")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                              labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, nmertmt2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_7 |>
+  knitr::kable()
+```
+
+- The prevalence of ED visits is higher among those with CUD vs among those without CD (31.3% vs 24.9%)
+
+Prevalence of ED visits (`nmertmt2`) among levels of severity of CUD (`irpysev5mrj`)
+```{r}
+table_8 <- nsduh_design |>
+  mutate(nmertmt2 = factor(ifelse(nmertmt2 > 900, NA, 
+                           ifelse(nmertmt2 > 0 & nmertmt2 < 33, 1, nmertmt2)), 
+                           labels = c("No ED visit", "ED visit")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, nmertmt2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_8 |>
+  knitr::kable()
+```
+
+- There seems to be a sort of dose response or increasing prevalence of ED visits with increasing severity of CUD. 
+
+
+- `INHOSPYR` asks: During the past 12 months, have you stayed overnight or longer as an inpatient in a hospital? This is a binary no/yes variable that seems to measure hospitalization. However, it does have the following values: 985 = bad data logically assigned, 94 = don't know, 97 = refused, 98 = blank (no answer). I guess the most worrisome one is value 94 because we don't know if its a true missing, but the other ones sound to me like missings. We can discuss, but for now I am going to treat these values as missing.
+
+Prevalence of hospitalizations (`inhospyr`) among cannabis users. Approximately 8% of cannabis users have had an hospitalization in the past year.
+```{r}
+table_9 <- nsduh_design |>
+  mutate(inhospyr = factor(ifelse(inhospyr > 80, NA, 
+                           ifelse(inhospyr == 2 , 0, inhospyr)), 
+                           labels = c("No hospitalization", "Yes hospitalization"))) |>
+  filter(mrjyr == 1) |>
+  group_by(inhospyr) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_9 |>
+  knitr::kable()
+```
+
+Prevalence of hospitalization (`inhospyr`) among those with CUD (`irpyud5mrj`).
+```{r}
+table_10 <- nsduh_design |>
+  mutate(inhospyr = factor(ifelse(inhospyr > 80, NA, 
+                                  ifelse(inhospyr == 2 , 0, inhospyr)), 
+                           labels = c("No hospitalization", "Yes hospitalization")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, inhospyr) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+
+```
+  
+- Hospitalizations are slightly higher among those with CUD than those without (8.6% vs 7.7%).
+
+Prevalence of hospitalization (`inhospyr`) by severity of CUD
+```{r}
+table_11 <- nsduh_design |>
+  mutate(inhospyr = factor(ifelse(inhospyr > 80, NA, 
+                                  ifelse(inhospyr == 2 , 0, inhospyr)), 
+                           labels = c("No hospitalization", "Yes hospitalization")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, inhospyr) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_11 |>
+  knitr::kable()
+```
+
+- The prevalence of hospitalization seems to be higher among those with moderate to severe CUD. 
+
+- `NMVSOPT2` asks: During the past 12 months, how many times have you visited a doctor, nurse, physician assistant or nurse practitioner about your own health at a doctor’s office, a clinic, or some other place? This variable seems to measure outpatient visits. This is a weird (?) combination of discrete and categorical variable with values ranging from 0 to 15 as number of times of outpatient visits (discrete?), then values of 16 = 16 - 20 times, 17 = 21 - 25 times, 18 = 26 - 30 times, 19 = 31+ times, 985 = BAD DATA Logically assigned, 994 = DON'T KNOW, 997 = REFUSED, 998 = BLANK (NO ANSWER). Because of this mixed combination of discrete and categorical nature, I think it makes sense to categorize it as a binary No/Any outpatient visits. As before values greater than 985 will be treated as missings or `NA`. We can discuss what to make out of value 994, which may not be a true missing. 
+
+Prevalence of outpatient visits `nmvsopt2` among cannabis users. Approximately 74% of cannabis users had outpatient visits in the past year. 
+```{r}
+table_12 <- nsduh_design |>
+  mutate(nmvsopt2 = factor(ifelse(nmvsopt2 > 900, NA, 
+                                  ifelse(nmvsopt2 > 0 & nmvsopt2 < 20 , 1, nmvsopt2)), 
+                           labels = c("No outpatient visit", "Yes outpatient visit"))) |>
+  filter(mrjyr == 1) |>
+  group_by(nmvsopt2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_12 |>
+  knitr::kable()
+```
+
+Prevalence of outpatient visits `nmvsopt2` by cannabis use disorders `irpyud5mrj`.
+```{r}
+table_13 <- nsduh_design |>
+  mutate(nmvsopt2 = factor(ifelse(nmvsopt2 > 900, NA, 
+                                  ifelse(nmvsopt2 > 0 & nmvsopt2 < 20 , 1, nmvsopt2)), 
+                           labels = c("No outpatient visit", "Yes outpatient visit")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, nmvsopt2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_13 |>
+  knitr::kable()
+```
+
+- Those with CUD have less outpatients visits (69.7% vs 75.3%).
+
+Prevalence of outpatient visits (`nmvsopt2`) by severity of CUD (`irpysev5mrj`).
+```{r}
+table_14 <- nsduh_design |>
+  mutate(nmvsopt2 = factor(ifelse(nmvsopt2 > 900, NA, 
+                                  ifelse(nmvsopt2 > 0 & nmvsopt2 < 20 , 1, nmvsopt2)), 
+                           labels = c("No outpatient visit", "Yes outpatient visit")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, nmvsopt2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_14 |>
+  knitr::kable()
+```
+
+- The prevalence of outpatient visits is also lower across severity levels of CUD.
+
+- TELEAPTYR2 asks: During the past 12 months, have you talked to a doctor, physician assistant, or nurse practitioner about your own health over the phone, by email, or through video calling instead of going to an in-person appointment? This is a binary yes/no variable that seems to measure the use of telemedicine.
+
+Prevalence of telemedicine appointments (`teleaptyr2`) in the past year among cannabis users. 35.5% of cannabis users had a telemedicine appointment in the past year.
+
+```{r}
+table_15 <- nsduh_design |>
+  mutate(teleaptyr2 = factor(teleaptyr2, 
+                             labels = c("No telemedicine", "Yes telemedicine"))) |>
+  filter(mrjyr == 1) |>
+  group_by(teleaptyr2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_15 |>
+  knitr::kable()
+```
+
+Prevalence of telemedicine appointments (`teleaptyr2`) by cannabis use disorder `irpyud5mrj`.
+```{r}
+table_16 <- nsduh_design |>
+  mutate(teleaptyr2 = factor(teleaptyr2, 
+                             labels = c("No telemedicine", "Yes telemedicine")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, teleaptyr2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_16 |>
+  knitr::kable()
+```
+
+- The prevalence of telemedicine appointments is sligthly higher among those without CUD than those with (36.6% vs 33.1%).
+
+Prevalence of telemedicine appointments (`teleaptyr2`) across levels of severity of CUD (`irpysev5mrj`).
+```{r}
+table_17 <- nsduh_design |>
+  mutate(teleaptyr2 = factor(teleaptyr2, 
+                             labels = c("No telemedicine", "Yes telemedicine")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, teleaptyr2) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_17 |>
+  knitr::kable()
+```
+
+- The prevalence of telemedicine appointments is also lower across levels of CUD severity compared to those without CUD.
+
+### A few thoughts on healthcare service use
+
+It seems that the prevalence of ED and inpatient visits are higher among CUD and across CUD levels. On the other hand, the prevalence of outpatient and telemedicine visits are lower among CUD and across CUD levels. This is, I think, interesting from a healthcare utilization point of view. While this is subject to a lot of assumptions and probably can't be answered by this data, it seems that people with CUD are accessing or contacting the healthcare system when their health is worst. Whereas treatment continuation for CUD, for example, seems to take place as an outpatient and their engagement is lower. Just a thought.
+
+Also, how do we use these variables? I think that there could be a couple of options here. First, we could create a combined variable of healthcare utilization where 1 = positive response to any of these 4 variables and 0 = none. In my opinion, this could be a little problematic because ED/hospitalization and Outpatient/Telemedicine prevalence go in opposite directions. I wonder if they either cancel out and we end up seeing that there is no difference between people with and without CUD, or one pulls the other in one direction. 
+
+Another option would be to create a categorical variable with 5 levels: 0 = no healthcare utilization, 1 = ED visit, 2 = hospitalization, 3 = outpatient visit, 4 = telemedicine or, alternatively, one with 3 levels: 0 = no healthcare utilization, 1 = ED/hospitalization and 2 = outpatient/telemedicine. This could solve the issue of having prevalences going in both directions (higher lower) for people with CUD based on which type of service they use. However, there is the problem of what do we give priority to. For example, if an individual with CUD answers yes to both ED visit and outpatient visit, where do we classify them?
+
+We could also just keep them separately. 
+
+Lastly, the variables that are these combination of discrete and categorical like ED visits and outpatient visits that have a range of values of visits from 0 to X, and then categories of visits. Instead of making them binary (as I did here) yes/no, we could make categories that make sense. For example, for outpatient visits we could categorize them as 0 - 1 visits, 2 - X, X - Y, and more than Y. Something like that, but I am not sure what makes sense clinically in the past year. 
+
+## Cannabis Screening (Step 3)
+
+**I was debating whether calculations made for this step should be conditioned to individuals answering "YES" to having used any healthcare service. It kind of make sense to me, but I refrained for now to filter the prevalences of this step by healthcare utilization. Would like to now everyone's opinion about this.**
+
+- `HPUSEDRG` asks: During the past 12 months, did any doctor or other health care professional ask, either in person or on a form, if you use marijuana or other illegal drugs? This is a binary variable yes/no with answers 1 = YES, 2 = NO, 85 = BAD DATA Logically assigned, 94 = DON'T KNOW, 97 = REFUSED, 98 = BLANK (NO ANSWER), and 99 = LEGITIMATE SKIP. As before, values > 80 will be treated as missing for now. This variable seems to ask about cannabis use screening. 
+
+
+Prevalence of cannabis use screening by a healthcare professional (`hpusedrg`) among cannabis users.
+```{r}
+table_18 <- nsduh_design |>
+  mutate(hpusedrg = factor(ifelse(hpusedrg > 80, NA, 
+                                  ifelse(hpusedrg == 2, 0, hpusedrg)), 
+                           labels = c("No cannabis use screening", "Yes cannabis use screening"))) |>
+  filter(mrjyr == 1) |>
+  group_by(hpusedrg) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_18 |>
+  knitr::kable()
+```
+
+Prevalence of cannabis use screening by a healthcare professional (`hpusedrg`) by CUD (`irpyud5mrj`).
+```{r}
+table_19 <- nsduh_design |>
+  mutate(hpusedrg = factor(ifelse(hpusedrg > 80, NA, 
+                                  ifelse(hpusedrg == 2, 0, hpusedrg)), 
+                           labels = c("No cannabis use screening", "Yes cannabis use screening")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, hpusedrg) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_19 |>
+  knitr::kable()
+```
+
+- Prevalence of cannabis use screening is higher among those with CUD than those without (55.4% vs 50.8%).
+
+Prevalence of cannabis use screening (`hpusedrg`) by CUD severity (`irpysev5mrj`).
+```{r}
+table_20 <- nsduh_design |>
+  mutate(hpusedrg = factor(ifelse(hpusedrg > 80, NA, 
+                                  ifelse(hpusedrg == 2, 0, hpusedrg)), 
+                           labels = c("No cannabis use screening", "Yes cannabis use screening")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, hpusedrg) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_20 |>
+  knitr::kable()
+```
+
+- Cannabis use screening is algo higher among more severe CUD. 
+
+- `HPDRGTALK` asks: During the past 12 months, did any doctor or other health care professional talk to you about your use of
+[MARIJUANA/COCAINE/CRACK/HEROIN/INHALANTS/HALLUCINOGENS/METHAMPHETAMINE]? This has possible answers 1 = YES, 2 = NO, 85 = BAD DATA Logically assigned, 91 = NEVER USED MJ/COC/HER/HALL/INH/METH, 93 = DID NOT USE MJ/COC/HER/HAL/INH/METH IN PST 12 MOS, 94 = DON'T KNOW, 
+97 = REFUSED, 98 = BLANK (NO ANSWER), 99 = LEGITIMATE SKIP. 
+
+This binary yes/no variable seems to measure something different than screening for cannabis use. It seems like it measure whether the healthcare professional discuss their current use. Given this, it seems sensible to recode values of 91 = NEVER USED MJ/COC/HER/HALL/INH/METH, 93 = DID NOT USE MJ/COC/HER/HAL/INH/METH IN PST 12 MOS as "No", because it is not a missing answer. If the participant had never used, then there is no reason for having discussion about their drug use. 
+
+Prevalence of healthcare professional talk about drug use in the past year (`hpdrgtalk`) among cannabis users. 
+```{r}
+table_21 <- nsduh_design |>
+  mutate(hpdrgtalk = factor(ifelse(hpdrgtalk %in% c(85, 94, 97, 98, 99), NA, 
+                                  ifelse(hpdrgtalk %in% c(2, 91, 93), 0, hpdrgtalk)), 
+                           labels = c("No cannabis use talk", "Yes cannabis use talk"))) |>
+  filter(mrjyr == 1) |>
+  group_by(hpdrgtalk) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_21 |>
+  knitr::kable()
+```
+
+- About 20% of cannabis users have had a talk with their healthcare professional about their past-year drug use (including cannabis). 
+
+Prevalence of healthcare professional talk about drug use in the past year (`hpdrgtalk`) by CUD (`irpyud5mrj`).
+```{r}
+table_22 <- nsduh_design |>
+  mutate(hpdrgtalk = factor(ifelse(hpdrgtalk %in% c(85, 94, 97, 98, 99), NA, 
+                                  ifelse(hpdrgtalk %in% c(2, 91, 93), 0, hpdrgtalk)), 
+                            labels = c("No cannabis use talk", "Yes cannabis use talk")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, hpdrgtalk) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_22 |>
+  knitr::kable()
+```
+
+- Those with CUD have higher prevalence of having had talk with their health professional about their drug use (25.8% vs 17.7)
+
+Prevalence of health care professional talk about drug use in the past year (`hpdrgtalk`) by severity of CUD (`irpysev5mrj`).
+```{r}
+table_23 <- nsduh_design |>
+  mutate(hpdrgtalk = factor(ifelse(hpdrgtalk %in% c(85, 94, 97, 98, 99), NA, 
+                                  ifelse(hpdrgtalk %in% c(2, 91, 93), 0, hpdrgtalk)), 
+                            labels = c("No cannabis use talk", "Yes cannabis use talk")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, hpdrgtalk) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_23 |>
+  knitr::kable()
+```
+
+- The prevalence of talking with their healthcare professional about their current drug use (including cannabis) is higher by severity of CUD.
+
+## Substance use treatment (Step 4)
+
+**Also for this step, I think this should be conditional on Step 2--healthcare utilization--to follow the cascade of care logic. For now, I am not conditioning on this, but would love to hear everyone's opinion.**
+
+- `SUTOUTMRJPY` asks: RCVD SUB USE TRMT AS AN OUTPATIENT FOR MARIJUANA USE - PY. This is a binary variable yes/no. 
+
+However, the NSDUH codebook says: Because there is a relatively large number of respondents that did not indicate a substance for which they received outpatient treatment (respondents either answered no to or had missing data for all the substances they were asked about), it is important to consider the substance unspecified numbers (SUTOUTUNSPPY) when analyzing any of the specific substances or aggregate substance categories.
+
+`SUTOUTUNSPPY` asks: RCVD SUB USE TRMT AS AN OUTPATIENT - SUB UNSPECIFIED - PY. Also a binary variable. 
+
+There are some choices to make here: 
+
+1. include these two as separate variables, 
+2. create a 3-level variable with categories 0 = No, 1 = received treatment for cannabis use, and 3 = received treatment unspecified
+3. create a binary variable with categories 0 = No, 1 = received treatment of cannabis and/or unspecified.
+
+For now, I will keep them separate in the calculations to evaluate if there is enough sample size.
+
+Prevalence of outpatient cannabis treatment (`sutoutmrjpy`) among cannabis users.
+```{r}
+table_24 <- nsduh_design |>
+  mutate(sutoutmrjpy = factor(ifelse(sutoutmrjpy == -9, NA, sutoutmrjpy), 
+                              labels = c("No cannabis tx", "Yes cannabis tx"))) |>
+  filter(mrjyr == 1) |>
+  group_by(sutoutmrjpy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_24 |>
+  knitr::kable()
+```
+
+- Among cannabis users the prevalence of receiving outpatient treatment for cannabis use is about 1%.
+
+Prevalence of outpatient cannabis treatment (`sutoutmrjpy`) by CUD (`irpyud5mrj`). 
+```{r}
+table_25 <- nsduh_design |>
+  mutate(sutoutmrjpy = factor(ifelse(sutoutmrjpy == -9, NA, sutoutmrjpy), 
+                              labels = c("No cannabis tx", "Yes cannabis tx")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, sutoutmrjpy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_25 |>
+  knitr::kable()
+```
+
+- The prevalence of receiving outpatient treatment for cannabis use among those with CUD is higher than those without (2.34% vs 0.34%). However, there are a lot of missings in this variable, reinforcing the notion that it could be worth it to combine it with the other variable.
+
+Prevalence of outpatient cannabis treatment (`sutoutmrjpy`) by severity of CUD (`irpysev5mrj`).
+```{r}
+table_26 <- nsduh_design |>
+  mutate(sutoutmrjpy = factor(ifelse(sutoutmrjpy == -9, NA, sutoutmrjpy), 
+                              labels = c("No cannabis tx", "Yes cannabis tx")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, sutoutmrjpy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_26 |>
+  knitr::kable()
+```
+
+- The prevalenc of receiving outpatient treatment for cannabis also increases with severity of CUD.
+
+Exploring `SUTOUTUNSPPY`, receiving outpatient treatment for unspecified drug
+
+Prevalence of outpatient treatment for unspecified drug use (`sutoutunsppy`) among cannabis users.
+```{r}
+table_27 <- nsduh_design |>
+  mutate(sutoutunsppy = factor(ifelse(sutoutunsppy == -9, NA, sutoutunsppy), 
+                              labels = c("No unspecified drug tx", "Yes unspecified drug tx"))) |>
+  filter(mrjyr == 1) |>
+  group_by(sutoutunsppy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_27 |>
+  knitr::kable()
+```
+
+- Among cannabis users, the prevalence of receiving outpatient treatment for unspecified drug use is about 2%.
+
+Prevalence of outpatient treatment for unspecified drug use (`sutoutunsppy`) by CUD (`irpyud5mrj`).
+```{r}
+table_28 <- nsduh_design |>
+  mutate(sutoutunsppy = factor(ifelse(sutoutunsppy == -9, NA, sutoutunsppy), 
+                              labels = c("No unspecified drug tx", "Yes unspecified drug tx")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, sutoutunsppy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_28 |>
+  knitr::kable()
+```
+
+- The prevalence of receiving outpatient treatment for unspecified cannabis use is higher among those with CUD than without (3.3% vs 1.4%).
+
+Prevalence of outpatient treatment for unspecified drug use (`sutoutunsppy`) by severity of CUD (`irpyud5mrj`)
+```{r}
+table_29 <- nsduh_design |>
+  mutate(sutoutunsppy = factor(ifelse(sutoutunsppy == -9, NA, sutoutunsppy), 
+                              labels = c("No unspecified drug tx", "Yes unspecified drug tx")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, sutoutunsppy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_29 |>
+  knitr::kable()
+```
+
+- The prevalence of receiving outpatient treatment for unspecified drug use increases by severity of CUD.
+
+- `SUTINPPY` asks: RC-RCVD SUB USE TREATMENT AS AN INPATIENT - PAST YEAR. This is a binary variable that asks about inpatient treatment for drug and alcohol use. Seems to me that this is maybe, more relevant because most CUD treatment is done in the outpatient setting, but it is true that people with CUD might require hospitalization and treatments for their substance use. The issue is that this variable is not specific to inpatient cannabis treatment. 
+
+Prevalence of inpatient treatment for drug and alcohol use (`sutinppy`) among cannabis users.
+```{r}
+table_30 <- nsduh_design |>
+  mutate(sutinppy = factor(ifelse(sutinppy == -9, NA, sutinppy), 
+                              labels = c("No inpatient drug tx", "Yes inpatient drug tx"))) |>
+  filter(mrjyr == 1) |>
+  group_by(sutinppy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_30 |>
+  knitr::kable()
+```
+
+- The prevalence of inpatient treatment for drug and alcohol use is 2.1% among cannabis users.
+
+Prevalence of inpatient treatment for drug and alcohol use (`sutinppy`) by CUD (`irpyud5mrj`).
+```{r}
+table_31 <- nsduh_design |>
+  mutate(sutinppy = factor(ifelse(sutinppy == -9, NA, sutinppy), 
+                              labels = c("No inpatient drug tx", "Yes inpatient drug tx")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, sutinppy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T), .groups = "drop") |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_31 |>
+  knitr::kable()
+```
+
+- The prevalence of inpatient treatment for drug use and alcohol is higher among CUD than those without (3.7% v 1.4%)
+
+Prevalence of inpatient treatment for drug and alcohol use (`irpysev5mrj`) by severity of CUD (`irpysev5mrj`).
+```{r}
+table_32 <- nsduh_design |>
+  mutate(sutinppy = factor(ifelse(sutinppy == -9, NA, sutinppy), 
+                              labels = c("No inpatient drug tx", "Yes inpatient drug tx")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, sutinppy) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T), .groups = "drop") |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_32 |>
+  knitr::kable()
+```
+
+- The prevalence of inpatient treatment for drug and alcohol use also increases by severity of CUD.
+
+- `SUTPHVIDRG` asks: RCVD PHONE/VIDEO SERVICES FOR DRUG USE - PAST YEAR. This is a binary variable for receipt of phone or video services for drug use in the past year. It is coded as Yes if:
+
+1. Received phone or video services in the past year (IRSUTPHVID=1) and that service was for drug use only OR drug and alcohol use
+(SUTPHVIADB=2,3,5).
+
+2. Received phone or video services in the past year (IRSUTPHVID=1) and had used drugs but not alcohol in their lifetime [(ILLFLAG=1
+or PSYANYFLAG=1) and ALCFLAG=0].
+
+So, I think this means that the phone/video services are for people that use drugs not alcohol. 
+
+Prevalence of phone/video services for drug use in the past year (`sutphvidrg`) among cannabis users.
+```{r}
+table_33 <- nsduh_design |>
+  mutate(sutphvidrg = factor(ifelse(sutphvidrg == -9, NA, sutphvidrg), 
+                              labels = c("No phone/video srvc", "Yes phone/video srvc"))) |>
+  filter(mrjyr == 1) |>
+  group_by(sutphvidrg) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_33 |>
+  knitr::kable()
+```
+
+- The prevalence of phone/video services for drug use in the past year among cannabis users is 1.7%.
+
+Prevalence of phone/video services for drug use in the past year (`sutphvidrg`) by CUD (`irpyud5mrj`).
+```{r}
+table_34 <- nsduh_design |>
+  mutate(sutphvidrg = factor(ifelse(sutphvidrg == -9, NA, sutphvidrg), 
+                              labels = c("No phone/video srvc", "Yes phone/video srvc")), 
+         irpyud5mrj = factor(irpyud5mrj, 
+                             labels = c("No CUD", "Yes CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpyud5mrj, sutphvidrg) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_34 |>
+  knitr::kable()
+```
+
+- The prevalence of phone/video services for drug use is higher among those with CUD than without (3% vs 1%).
+
+Prevalence of phone/video services for drug use in the past year (`sutphvidrg`) by severity of CUD (`irpysev5mrj`).
+```{r}
+table_35 <- nsduh_design |>
+  mutate(sutphvidrg = factor(ifelse(sutphvidrg == -9, NA, sutphvidrg), 
+                              labels = c("No phone/video srvc", "Yes phone/video srvc")), 
+         irpysev5mrj = factor(ifelse(irpysev5mrj == 9, 0, irpysev5mrj), 
+                              labels = c("No CUD", "Mild CUD", "Moderate CUD", "Severe CUD"))) |>
+  filter(mrjyr == 1) |>
+  group_by(irpysev5mrj, sutphvidrg) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(prop = str_glue("{round(prop, 4) * 100}%"), 
+         `95% CI` = str_glue("({round(prop_low, 4) * 100}; {round(prop_upp, 4) *100})")) |>
+  select(-c(prop_low, prop_upp)) 
+
+table_35 |>
+  knitr::kable()
+```
+
+- The prevalence of phone/video services for drug use increases by severity of CUD.
+
+### A few thoughts on receipt of substance use treatment
+
+Despite this last variable being in the section of alcohol and drug treatment in NSDUH's codebook, the wording of this last variable on phone/video services makes me think it is not receipt of treatment per se, but more of an intervention through phone and video. I wonder if we can consider this as another step in the cascade of care about received intervention (not treatment) for their drug use (including cannabis). Something like that. 
+
+There are other variables in the section of alcohol and drug treatment, but they all seem to include either treatment for alcohol or being asked among those that use alcohol. So, I think the ones above are the most relevant, but happy to discuss any other one that could be considered.
