@@ -1,0 +1,87 @@
+---
+title: "Cascade of Care CUD"
+author: "Luis Segura"
+date: "`r sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+    code_folding: hide
+    highlight: kate
+    self-contained: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE, echo = F}
+knitr::opts_chunk$set(echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  fig.align = "center",
+  fig.width = 7,
+  fig.height = 8,
+  out.width = "90%",
+  cache = TRUE
+)
+
+### load packages
+pckgs <- c("tidyverse", "here", "survey", "srvyr")
+
+for (package in pckgs) {
+  library(package, character.only = T)
+}
+
+```
+
+
+```{r, echo = F}
+## Loading dataset
+load(here("data/", "nsduh_4analysis.Rdata"))
+
+nsduh_data |> 
+  group_by(year) |>
+  summarise(n = n())
+```
+
+```{r, echo = F}
+## creating survey design object
+nsduh_design <- nsduh_data |>
+  mutate(cud = factor(irpyud5mrj, 
+                              labels = c("No CUD", "Yes CUD")), 
+         nmertmt2 = factor(ifelse(nmertmt2 > 900, NA, 
+                           ifelse(nmertmt2 > 0 & nmertmt2 < 33, 1, nmertmt2)), 
+                           labels = c("No ED visit", "ED visit")),
+         inhospyr = factor(ifelse(inhospyr > 80, NA, 
+                           ifelse(inhospyr == 2 , 0, inhospyr)), 
+                           labels = c("No hospitalization", "Yes hospitalization")),
+         nmvsopt2 = factor(ifelse(nmvsopt2 > 900, NA, 
+                                  ifelse(nmvsopt2 > 0 & nmvsopt2 < 20 , 1, nmvsopt2)), 
+                           labels = c("No outpatient visit", "Yes outpatient visit")),
+         teleaptyr2 = factor(teleaptyr2, 
+                             labels = c("No telemedicine", "Yes telemedicine")),
+         htlh_util = factor(ifelse(nmertmt2 == 1 | inhospyr == 1 | 
+                                     nmvsopt2 == 1 | teleaptyr2 == 1, 1, 0), 
+                            labels = c("No", "Yes")), 
+         hpusedrg = factor(ifelse(hpusedrg > 80, NA, 
+                                  ifelse(hpusedrg == 2, 0, hpusedrg)), 
+                           labels = c("No cannabis use screening", "Yes cannabis use screening"))
+         hpdrgtalk = factor(ifelse(hpdrgtalk %in% c(85, 94, 97, 98, 99), NA, 
+                                  ifelse(hpdrgtalk %in% c(2, 91, 93), 0, hpdrgtalk)), 
+                           labels = c("No cannabis use talk", "Yes cannabis use talk")), 
+         ) |>
+  as_survey_design(strata = vestr_c, 
+                   ids = verep, 
+                   weights = analwt2_c3, 
+                   nest = T) 
+
+cud_design <- nsduh_design |>
+  filter(cud == "Yes CUD")
+
+
+```
+
+```{r}
+cud_design |>
+```
+
