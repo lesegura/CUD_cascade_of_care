@@ -1,7 +1,7 @@
 ---
 title: "Cascade of Care CUD"
 author: "Luis Segura"
-date: "`r sys.Date()`"
+date: "`r Sys.Date()`"
 output: 
   html_document:
     toc: true
@@ -39,13 +39,26 @@ for (package in pckgs) {
 ## Loading dataset
 load(here("data/", "nsduh_4analysis.Rdata"))
 
-nsduh_data |> 
-  group_by(year) |>
-  summarise(n = n())
 ```
 
+First, create the survey design object. I am also recoding some variables. Note that I am combining four binary variables to create the variable for healthcare utilization `hlth_util`. These variables are:
+
+- `NMERTMT2` asks: During the past 12 months, that is since DATEFILL, how many different times have you been treated in an emergency room for any reason?
+
+- `INHOSPYR` asks: During the past 12 months, have you stayed overnight or longer as an inpatient in a hospital? This is a binary no/yes variable that seems to measure hospitalization.
+
+- `NMVSOPT2` asks: During the past 12 months, how many times have you visited a doctor, nurse, physician assistant or nurse practitioner about your own health at a doctor’s office, a clinic, or some other place?
+
+- `TELEAPTYR2` asks: During the past 12 months, have you talked to a doctor, physician assistant, or nurse practitioner about your own health over the phone, by email, or through video calling instead of going to an in-person appointment? 
+
+We also created a combined binary variable for CUD outpatient treatment `cud_trtment` from:
+
+- `SUTOUTMRJPY` asks: RCVD SUB USE TRMT AS AN OUTPATIENT FOR MARIJUANA USE - PY. This is a binary variable yes/no
+
+- `SUTOUTUNSPPY` asks: RCVD SUB USE TRMT AS AN OUTPATIENT - SUB UNSPECIFIED - PY
+
 ```{r, echo = F}
-## creating survey design object
+## creating survey design object and some recoding
 nsduh_design <- nsduh_data |>
   mutate(cud = factor(irpyud5mrj, 
                               labels = c("No CUD", "Yes CUD")), 
@@ -60,28 +73,166 @@ nsduh_design <- nsduh_data |>
                            labels = c("No outpatient visit", "Yes outpatient visit")),
          teleaptyr2 = factor(teleaptyr2, 
                              labels = c("No telemedicine", "Yes telemedicine")),
-         htlh_util = factor(ifelse(nmertmt2 == 1 | inhospyr == 1 | 
-                                     nmvsopt2 == 1 | teleaptyr2 == 1, 1, 0), 
-                            labels = c("No", "Yes")), 
+         hlth_util = factor(ifelse(nmertmt2 == "ED visit" | inhospyr == "Yes hospitalization" | 
+                                     nmvsopt2 == "Yes outpatient visit" | teleaptyr2 == "Yes telemedicine", 1, 0), 
+                            labels = c("No", "Yes Healthcare Utilization")), 
          hpusedrg = factor(ifelse(hpusedrg > 80, NA, 
                                   ifelse(hpusedrg == 2, 0, hpusedrg)), 
-                           labels = c("No cannabis use screening", "Yes cannabis use screening"))
+                           labels = c("No cannabis use screening", "Yes cannabis use screening")),
          hpdrgtalk = factor(ifelse(hpdrgtalk %in% c(85, 94, 97, 98, 99), NA, 
                                   ifelse(hpdrgtalk %in% c(2, 91, 93), 0, hpdrgtalk)), 
                            labels = c("No cannabis use talk", "Yes cannabis use talk")), 
-         ) |>
+         sutoutmrjpy = factor(ifelse(sutoutmrjpy == -9, NA, sutoutmrjpy), 
+                              labels = c("No cannabis tx", "Yes cannabis tx")), 
+         sutoutunsppy = factor(ifelse(sutoutunsppy == -9, NA, sutoutunsppy), 
+                              labels = c("No unspecified drug tx", "Yes unspecified drug tx")), 
+         cud_trtment = factor(ifelse(sutoutmrjpy == "Yes cannabis tx" | 
+                                       sutoutunsppy == "Yes unspecified drug tx", 1, 0), 
+                              labels = c("No treatment", "Yes treatment"))) |>
   as_survey_design(strata = vestr_c, 
                    ids = verep, 
                    weights = analwt2_c3, 
                    nest = T) 
 
+# Subset to those with CUD 
 cud_design <- nsduh_design |>
   filter(cud == "Yes CUD")
 
 
 ```
 
+
 ```{r}
-cud_design |>
+nsduh_design |>
+  group_by(cud) |>
+  summarise(n = n(), 
+            w_n = survey_total(),
+            prop = survey_prop(vartype = "ci", proportion = T)) |>
+  mutate(w_n = round(w_n)) |>
+  mutate(across(c("prop", "prop_low", "prop_upp")) * 100)
+  
+```
+
+
+In our sample (NSDUH 2021-2023), 6.45% (6.22 - 6.69) of the US population 12 and older had cannabis use disorder, which represent 18,175,923 individuals.
+
+## Creating the Steps of the Cascade of Care
+
+
+**STEP 1:** Defining the denominator--those with CUD (n = 14,427)
+```{r}
+step_1 <- cud_design |> 
+  group_by(cud) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T), .groups = "drop") |>
+  mutate(across(c("prop", "prop_low", "prop_upp")) * 100)
+
+step_1 |>
+  mutate(across(c("prop", "prop_low", "prop_upp")), round(2))
+
+```
+
+
+**STEP 2:** Among those 14,427 individuals (unweighted n) with CUD, what is the proportion that utilize healthcare in the past year?
+
+Note: this variable has ~2.5% missings.
+```{r}
+step_2 <- cud_design |> 
+  filter(!is.na(hlth_util)) |>
+  group_by(cud, hlth_util) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T), .groups = "drop") |>
+  mutate(across(c("prop", "prop_low", "prop_upp")) * 100)
+
+step_2
+```
+
+**STEP 3:** Using the same 14,427 individuals with CUD, how many had cannabis screening? 
+
+Note this variable had ~24% missings. For now, we are ignoring them, but we should probably address this.
+```{r}
+step_3 <- cud_design |> 
+  filter(!is.na(hpusedrg)) |>
+  group_by(cud, hpusedrg) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T), .groups = "drop") |>
+  mutate(across(c("prop", "prop_low", "prop_upp")) * 100)
+
+step_3
+```
+
+**STEP 4:** using the same denominator, how many receive treatment?
+
+Note this variable had ~30% missings. For now, we are ignoring them, but we should probably address this.
+```{r}
+step_4 <- cud_design |> 
+  filter(!is.na(cud_trtment)) |>
+  group_by(cud, cud_trtment) |>
+  summarise(n = n(), 
+            prop = survey_prop(vartype = "ci", proportion = T), .groups = "drop") |>
+  mutate(across(c("prop", "prop_low", "prop_upp")) * 100)
+
+step_4
+```
+
+## Figure 1. Cascade of Care of Cannabis Use Disorder, NSDUH 2021-2023 (n=14,423)
+```{r}
+### first, I need to join all the steps into one single table to create the figure.
+cascade_fig <- bind_rows(
+  step_1 |>
+  rename(step = cud) |>
+  mutate(prop_low = NA, 
+         prop_upp = NA),
+  
+  step_2 |>
+  filter(hlth_util == "Yes Healthcare Utilization") |>
+  rename(step = hlth_util) |>
+  select(-cud),
+  
+  step_3 |>
+  filter(hpusedrg == "Yes cannabis use screening") |>
+  rename(step = hpusedrg) |>
+  select(-cud),
+  
+  step_4 |>
+  filter(cud_trtment  == "Yes treatment") |>
+  rename(step = cud_trtment) |>
+  select(-cud)
+)
+
+
+## changing the labels of the variable step
+cascade_fig$step <- droplevels(cascade_fig$step)
+
+
+cascade_fig <- cascade_fig |>
+  mutate(step = fct_recode(step, 
+                           "CUD" = "Yes CUD", 
+                           "Used Healthcare" = "Yes Healthcare Utilization",  
+                           "Screened" = "Yes cannabis use screening", 
+                           "Treated" = "Yes treatment"))
+
+## create the figure
+cascade_plot <- cascade_fig |>
+  ggplot(aes(x = step, y = prop, 
+             ymin = prop_low, 
+             ymax = prop_upp, 
+             colour = step, 
+             fill = step)) +
+  geom_col() +
+  geom_errorbar(color = "black",
+                width = 0.2,
+                linewidth = 0.5) +
+  ggthemes::theme_clean() + 
+  theme(legend.position = "none") + 
+  labs(y = "%", 
+       x = "", 
+       caption = c("This cascade uses the first bar as the common denominator for each of the following steps")) + 
+  scale_y_continuous(breaks = seq(0, 100, by = 10), 
+                     expand = expansion(mult = c(0, 0.03)))
+  
+  
+cascade_plot
+
 ```
 
